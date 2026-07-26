@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/pptx_diagram_export/__init__.py
+src/pptx_diagram_export/backends.py
+src/pptx_diagram_export/bounds.py
+src/pptx_diagram_export/cli.py
+src/pptx_diagram_export.egg-info/PKG-INFO
+src/pptx_diagram_export.egg-info/SOURCES.txt
+src/pptx_diagram_export.egg-info/dependency_links.txt
+src/pptx_diagram_export.egg-info/entry_points.txt
+src/pptx_diagram_export.egg-info/requires.txt
+src/pptx_diagram_export.egg-info/top_level.txt
+tests/test_core.py

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pptx-diagram-export"
+version = "0.1.1"
+description = "Export tightly cropped PowerPoint diagrams to vector PDF or PNG."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "Pillow>=10.0.0",
+    "PyMuPDF>=1.24.0",
+    "pywin32>=306; sys_platform == 'win32'",
+]
+
+[project.scripts]
+pptx-diagram-export = "pptx_diagram_export.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,82 @@
+# PPTX Diagram Export
+
+An MVP command-line tool for exporting PowerPoint diagrams with the slide
+whitespace removed. PDF output remains vector-based; PNG output is rendered at
+the requested resolution.
+
+## Requirements
+
+- Python 3.10 or newer
+- Windows: Microsoft PowerPoint (preferred), or LibreOffice
+- macOS: LibreOffice
+
+The Windows PowerPoint backend gives the closest match to PowerPoint's own
+rendering. The LibreOffice backend makes the same command available on macOS
+and on Windows machines without PowerPoint.
+
+## Install
+
+From this directory:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
+
+On macOS:
+
+```bash
+brew install --cask libreoffice
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+## Use
+
+```text
+pptx-diagram-export INPUT.pptx [--pages SELECTION]
+    [--format pdf|png] [--margin SIZE] [-o DIRECTORY]
+```
+
+Examples:
+
+```powershell
+# All slides, each as a tightly cropped vector PDF
+pptx-diagram-export "paper figures.pptx" --format pdf --margin 0 -o figures
+
+# Slides 1, 3, 4, and 5 with a 2 mm border, creating pdf-figures if needed
+pptx-diagram-export "paper figures.pptx" --pages 1,3-5 --margin 2mm -o pdf-figures
+
+# One 300-DPI PNG, written as png-figures/slide-07.png
+pptx-diagram-export "paper figures.pptx" --pages 7 --format png -o png-figures
+
+# Several 600-DPI PNGs in a directory
+pptx-diagram-export "paper figures.pptx" --pages 2-4 --format png --dpi 600 -o figures
+```
+
+`--margin` is measured in PowerPoint/PDF points when no unit is supplied.
+Accepted suffixes are `pt`, `px` (96 DPI CSS pixels), `mm`, `cm`, and `in`.
+The default is `0`.
+
+`-o/--output` always selects a directory, which is created if it does not
+exist. Every selected slide becomes its own `slide-NN.pdf` or `slide-NN.png`.
+The default directory is `<input>-export`. Existing files are protected unless
+`--force` is supplied; unrelated files in the directory are left untouched.
+
+The renderer is chosen automatically. Use `--backend powerpoint` or
+`--backend libreoffice` to force one while troubleshooting.
+
+## MVP limitations
+
+- Cropping is detected from the rendered slide against its corner background,
+  then applied to the vector PDF. This includes visible strokes, shadows,
+  arrowheads, and slide-master artwork while ignoring a uniform slide
+  background.
+- A non-uniform background (for example a full-slide photo or gradient) is
+  treated as diagram content and therefore cannot be trimmed automatically.
+- Objects extending beyond the original slide boundary are clipped because
+  presentation renderers do not draw outside the slide canvas.
+- Rendering fidelity on macOS follows LibreOffice Impress and can differ
+  slightly from Microsoft PowerPoint for uncommon fonts, effects, or charts.

@@ -1,0 +1,2 @@
+[console_scripts]
+pptx-diagram-export = pptx_diagram_export.cli:main
