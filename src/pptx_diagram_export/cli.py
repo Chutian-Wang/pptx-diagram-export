@@ -14,9 +14,9 @@ from .bounds import Box, RenderedGeometry, inspect_rendered_pdf, parse_margin, p
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pptx-diagram-export",
-        description="Export tightly cropped PowerPoint slides to PDF or PNG.",
+        description="Export tightly cropped PowerPoint or PDF pages to PDF or PNG.",
     )
-    parser.add_argument("input", type=Path, help="input .pptx file")
+    parser.add_argument("input", type=Path, help="input .pptx or .pdf file")
     parser.add_argument(
         "--pages",
         default="all",
@@ -174,17 +174,24 @@ def run(args: argparse.Namespace) -> tuple[list[Path], str]:
     input_path = args.input.expanduser().resolve()
     if not input_path.is_file():
         raise ValueError(f"input file does not exist: {input_path}")
-    if input_path.suffix.lower() != ".pptx":
-        raise ValueError("input file must have a .pptx extension")
+    input_suffix = input_path.suffix.lower()
+    if input_suffix not in {".pptx", ".pdf"}:
+        raise ValueError("input file must have a .pptx or .pdf extension")
 
     margin = parse_margin(args.margin)
 
     with tempfile.TemporaryDirectory(prefix="pptx-diagram-export-") as temp:
         temp_dir = Path(temp)
-        rendered_pdf = temp_dir / "rendered.pdf"
-        backend = render_pdf(
-            input_path, rendered_pdf, temp_dir / "lo-profile", args.backend
-        )
+        if input_suffix == ".pdf":
+            if args.backend != "auto":
+                raise ValueError("--backend cannot be used with a PDF input")
+            rendered_pdf = input_path
+            backend = "pdf"
+        else:
+            rendered_pdf = temp_dir / "rendered.pdf"
+            backend = render_pdf(
+                input_path, rendered_pdf, temp_dir / "lo-profile", args.backend
+            )
         rendered = pymupdf.open(rendered_pdf)
         try:
             geometry = inspect_rendered_pdf(rendered)

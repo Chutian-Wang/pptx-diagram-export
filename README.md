@@ -1,6 +1,6 @@
 # PPTX Diagram Export
 
-An MVP command-line tool for exporting PowerPoint diagrams with the slide
+An MVP command-line tool for exporting PowerPoint or PDF diagrams with the slide
 whitespace removed. PDF output remains vector-based; PNG output is rendered at
 the requested resolution.
 
@@ -8,35 +8,106 @@ the requested resolution.
 
 - Python 3.10 or newer
 - Windows: Microsoft PowerPoint (preferred), or LibreOffice
-- macOS: LibreOffice
+- macOS: Microsoft PowerPoint (preferred), or LibreOffice
 
-The Windows PowerPoint backend gives the closest match to PowerPoint's own
-rendering. The LibreOffice backend makes the same command available on macOS
-and on Windows machines without PowerPoint.
+The PowerPoint backend gives the closest match to PowerPoint's own rendering.
+On macOS it uses AppleScript and may request Automation permission the first
+time it runs. The LibreOffice backend supports machines without PowerPoint.
+Already-exported PDF files can be used directly without either application.
 
-## Install
+## Install globally with pipx
 
-From this directory:
+`pipx` installs the command in an isolated Python environment while making
+`pptx-diagram-export` available from any directory. Clone or download this
+repository first, then run the installation commands from its root directory.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+### macOS
+
+Install Python 3.10 or newer and `pipx`:
+
+```bash
+brew install python pipx
+pipx ensurepath
 ```
 
-On macOS:
+Open a new terminal so the updated `PATH` takes effect, then install the tool:
+
+```bash
+cd /path/to/pptx-diagram-export
+pipx install .
+pptx-diagram-export --help
+```
+
+Microsoft PowerPoint is used automatically when installed. If PowerPoint is
+not available, install the optional LibreOffice fallback:
 
 ```bash
 brew install --cask libreoffice
+```
+
+The first PowerPoint export may cause macOS to ask whether your terminal or
+Python can automate Microsoft PowerPoint. Allow access for the backend to work.
+
+### Windows
+
+Install Python 3.10 or newer, making sure the Python launcher (`py`) is
+available. In PowerShell, install `pipx` and add its command directory to
+`PATH`:
+
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
+```
+
+Open a new PowerShell window, then install the tool from the repository:
+
+```powershell
+cd C:\path\to\pptx-diagram-export
+pipx install .
+pptx-diagram-export --help
+```
+
+Microsoft PowerPoint is preferred on Windows. LibreOffice can be installed
+separately as a fallback when PowerPoint is unavailable.
+
+### Upgrade or uninstall
+
+After pulling a newer version of this repository, reinstall it with:
+
+```bash
+pipx install --force .
+```
+
+Remove the global installation with:
+
+```bash
+pipx uninstall pptx-diagram-export
+```
+
+## Development install
+
+For an editable installation used while modifying the source:
+
+macOS:
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install -e .
+```
+
+Windows PowerShell:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -e .
 ```
 
 ## Use
 
 ```text
-pptx-diagram-export INPUT.pptx [--pages SELECTION]
+pptx-diagram-export INPUT.pptx|INPUT.pdf [--pages SELECTION]
     [--format pdf|png] [--margin SIZE] [-o DIRECTORY]
 ```
 
@@ -66,7 +137,8 @@ The default directory is `<input>-export`. Existing files are protected unless
 `--force` is supplied; unrelated files in the directory are left untouched.
 
 The renderer is chosen automatically. Use `--backend powerpoint` or
-`--backend libreoffice` to force one while troubleshooting.
+`--backend libreoffice` to force one while troubleshooting. `--backend` does
+not apply to PDF inputs because they bypass presentation rendering.
 
 ## MVP limitations
 
@@ -78,5 +150,6 @@ The renderer is chosen automatically. Use `--backend powerpoint` or
   treated as diagram content and therefore cannot be trimmed automatically.
 - Objects extending beyond the original slide boundary are clipped because
   presentation renderers do not draw outside the slide canvas.
-- Rendering fidelity on macOS follows LibreOffice Impress and can differ
-  slightly from Microsoft PowerPoint for uncommon fonts, effects, or charts.
+- Rendering fidelity follows the selected presentation renderer. LibreOffice
+  Impress can differ slightly from Microsoft PowerPoint for uncommon fonts,
+  effects, or charts.

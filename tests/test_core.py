@@ -1,11 +1,14 @@
 import tempfile
+from argparse import Namespace
 from pathlib import Path
 from unittest import TestCase
+from unittest.mock import patch
 
 import pymupdf
 
+from pptx_diagram_export.backends import _powerpoint_macos_export
 from pptx_diagram_export.bounds import inspect_rendered_pdf, parse_margin, parse_pages
-from pptx_diagram_export.cli import _output_targets, _prepare_output_directory
+from pptx_diagram_export.cli import _output_targets, _prepare_output_directory, run
 
 
 class ParsePagesTests(TestCase):
@@ -75,3 +78,95 @@ class OutputTargetsTests(TestCase):
             targets = _output_targets(directory, [2], 10, "pdf")
             _prepare_output_directory(directory, targets, force=False)
             self.assertTrue(directory.is_dir())
+
+
+class PdfInputTests(TestCase):
+    def _args(self, input_path: Path, output: Path, backend: str = "auto"):
+        return Namespace(
+            input=input_path,
+            pages="all",
+            format="pdf",
+            margin="0",
+            output=output,
+            dpi=300.0,
+            backend=backend,
+            force=False,
+        )
+
+    def test_pdf_input_bypasses_presentation_renderer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            input_path = temp_path / "diagrams.pdf"
+            document = pymupdf.open()
+            page = document.new_page(width=200, height=100)
+            page.draw_rect(
+                pymupdf.Rect(40, 20, 160, 80),
+                color=(0, 0, 0),
+                fill=(0.2, 0.4, 0.8),
+            )
+            document.save(input_path)
+            document.close()
+
+            created, backend = run(
+                self._args(input_path, temp_path / "exported")
+            )
+
+            self.assertEqual(backend, "pdf")
+            self.assertEqual(len(created), 1)
+            self.assertTrue(created[0].is_file())
+
+    def test_pdf_input_rejects_explicit_backend(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            input_path = temp_path / "diagrams.pdf"
+            document = pymupdf.open()
+            document.new_page()
+            document.save(input_path)
+            document.close()
+
+            with self.assertRaisesRegex(
+                ValueError, "--backend cannot be used with a PDF input"
+            ):
+                run(
+                    self._args(
+                        input_path, temp_path / "exported", backend="powerpoint"
+                    )
+                )
+
+
+class MacPowerPointBackendTests(TestCase):
+    def test_passes_paths_as_osascript_arguments(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = Path(temp)
+            input_path = temp_path / "input deck.pptx"
+            output_path = temp_path / "rendered deck.pdf"
+
+            def fake_run(command, **kwargs):
+                staged_path = Path(command[-1])
+                self.assertTrue(staged_path.is_file())
+                self.assertEqual(command[0:2], ["/usr/bin/osascript", "-e"])
+                self.assertEqual(command[-2], str(input_path))
+                self.assertEqual(staged_path.parent, temp_path / "staging")
+                self.assertNotIn(str(input_path), command[2])
+                self.assertIn("set openedByThisScript to true", command[2])
+                self.assertIn("save active presentation", command[2])
+                staged_path.write_bytes(b"%PDF")
+                return Namespace(returncode=0, stdout="", stderr="")
+
+            with (
+                patch(
+                    "pptx_diagram_export.backends.find_powerpoint_macos",
+                    return_value=Path("/Applications/Microsoft PowerPoint.app"),
+                ),
+                patch(
+                    "pptx_diagram_export.backends._powerpoint_macos_staging_dir",
+                    return_value=temp_path / "staging",
+                ),
+                patch(
+                    "pptx_diagram_export.backends.subprocess.run",
+                    side_effect=fake_run,
+                ),
+            ):
+                _powerpoint_macos_export(input_path, output_path)
+
+            self.assertTrue(output_path.is_file())
