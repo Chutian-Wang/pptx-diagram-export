@@ -140,16 +140,29 @@ class MacPowerPointBackendTests(TestCase):
             temp_path = Path(temp)
             input_path = temp_path / "input deck.pptx"
             output_path = temp_path / "rendered deck.pdf"
+            input_path.write_bytes(b"deck contents")
+            staged_inputs = []
 
             def fake_run(command, **kwargs):
                 staged_path = Path(command[-1])
                 self.assertTrue(staged_path.is_file())
                 self.assertEqual(command[0:2], ["/usr/bin/osascript", "-e"])
-                self.assertEqual(command[-2], str(input_path))
+                # PowerPoint opens a private copy, never the user's file.
+                staged_input = Path(command[-2])
+                staged_inputs.append(staged_input)
+                self.assertNotEqual(staged_input, input_path)
+                self.assertEqual(staged_input.parent, temp_path / "staging")
+                self.assertEqual(staged_input.suffix, ".pptx")
+                self.assertEqual(staged_input.read_bytes(), b"deck contents")
                 self.assertEqual(staged_path.parent, temp_path / "staging")
                 self.assertNotIn(str(input_path), command[2])
                 self.assertIn("set openedByThisScript to true", command[2])
                 self.assertIn("save active presentation", command[2])
+                self.assertIn(
+                    'set wasRunning to application "Microsoft PowerPoint" is running',
+                    command[2],
+                )
+                self.assertIn("my quitIfLaunched(wasRunning)", command[2])
                 staged_path.write_bytes(b"%PDF")
                 return Namespace(returncode=0, stdout="", stderr="")
 
@@ -170,3 +183,6 @@ class MacPowerPointBackendTests(TestCase):
                 _powerpoint_macos_export(input_path, output_path)
 
             self.assertTrue(output_path.is_file())
+            self.assertEqual(len(staged_inputs), 1)
+            self.assertFalse(staged_inputs[0].exists())
+            self.assertTrue(input_path.is_file())

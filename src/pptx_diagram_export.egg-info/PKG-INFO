@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: pptx-diagram-export
-Version: 0.1.1
+Version: 0.1.2
 Summary: Export tightly cropped PowerPoint or PDF diagrams to vector PDF or PNG.
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
@@ -57,6 +57,10 @@ brew install --cask libreoffice
 
 The first PowerPoint export may cause macOS to ask whether your terminal or
 Python can automate Microsoft PowerPoint. Allow access for the backend to work.
+
+The PowerPoint backend exports a temporary copy of the saved file, so a deck
+you already have open is left untouched (unsaved edits are not included in the
+export). PowerPoint is quit afterwards only if the export had to launch it.
 
 ### Windows
 

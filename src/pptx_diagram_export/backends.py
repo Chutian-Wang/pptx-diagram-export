@@ -18,12 +18,20 @@ def _powerpoint_windows_export(input_path: Path, output_pdf: Path) -> None:
     except ImportError as exc:
         raise BackendError("pywin32 is not installed") from exc
 
+    # PowerPoint is a single-instance COM server, so DispatchEx attaches to an
+    # instance the user already has open. Only quit it if we launched it.
+    was_running = _powerpoint_windows_is_running()
+    # Open a private copy so a deck the user already has open in PowerPoint
+    # is never reused, exported with unsaved edits, or closed by us.
+    copy_dir = Path(tempfile.mkdtemp(prefix="pptx-diagram-export-"))
+    source_copy = copy_dir / f"source{input_path.suffix}"
     app = None
     presentation = None
     try:
+        shutil.copy2(input_path, source_copy)
         app = win32com.client.DispatchEx("PowerPoint.Application")
         presentation = app.Presentations.Open(
-            str(input_path), ReadOnly=True, Untitled=False, WithWindow=False
+            str(source_copy), ReadOnly=True, Untitled=False, WithWindow=False
         )
         # SaveAs is supported by more Office/pywin32 combinations than
         # ExportAsFixedFormat, whose optional ExternalExporter COM parameter
@@ -34,8 +42,31 @@ def _powerpoint_windows_export(input_path: Path, output_pdf: Path) -> None:
     finally:
         if presentation is not None:
             presentation.Close()
-        if app is not None:
-            app.Quit()
+        if app is not None and not was_running:
+            try:
+                # Leave PowerPoint alone if the user opened a presentation
+                # in the instance we launched while the export was running.
+                if app.Presentations.Count == 0:
+                    app.Quit()
+            except Exception:
+                pass
+        shutil.rmtree(copy_dir, ignore_errors=True)
+
+
+def _powerpoint_windows_is_running() -> bool:
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq POWERPNT.EXE", "/NH"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        # If we cannot tell, assume it was running so we never close a
+        # PowerPoint session the user is working in.
+        return True
+    return "powerpnt.exe" in result.stdout.lower()
 
 
 def find_powerpoint_macos() -> Path | None:
@@ -63,18 +94,32 @@ def _powerpoint_macos_export(input_path: Path, output_pdf: Path) -> None:
     # Sandboxed PowerPoint cannot save into Python's /var/folders temporary
     # directory and may report the opaque error -9074. Stage the PDF in
     # PowerPoint's own container, then move it into the renderer workspace.
+    # The input is staged there too: opening a private copy means a deck the
+    # user already has open is never reused, exported with unsaved edits, or
+    # closed by the script below.
     staging_dir = _powerpoint_macos_staging_dir()
     staging_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         prefix="rendered-", suffix=".pdf", dir=staging_dir, delete=False
     ) as staging_file:
         staged_pdf = Path(staging_file.name)
+    with tempfile.NamedTemporaryFile(
+        prefix="source-", suffix=input_path.suffix, dir=staging_dir, delete=False
+    ) as staging_file:
+        staged_input = Path(staging_file.name)
+    try:
+        shutil.copy2(input_path, staged_input)
+    except OSError as exc:
+        staged_input.unlink(missing_ok=True)
+        staged_pdf.unlink(missing_ok=True)
+        raise BackendError(f"could not stage presentation: {exc}") from exc
 
     script = r'''
 on run argv
     set inputPath to item 1 of argv
     set outputPath to item 2 of argv
     set openedByThisScript to false
+    set wasRunning to application "Microsoft PowerPoint" is running
 
     try
         with timeout of 600 seconds
@@ -90,13 +135,26 @@ on run argv
                 tell application "Microsoft PowerPoint" to close active presentation saving no
             end try
         end if
+        my quitIfLaunched(wasRunning)
         error errorMessage number errorNumber
     end try
+    my quitIfLaunched(wasRunning)
 end run
+
+on quitIfLaunched(wasRunning)
+    if wasRunning then return
+    try
+        tell application "Microsoft PowerPoint"
+            -- Leave PowerPoint alone if the user opened a presentation
+            -- while the export was running.
+            if (count of presentations) is 0 then quit saving no
+        end tell
+    end try
+end quitIfLaunched
 '''
     try:
         result = subprocess.run(
-            ["/usr/bin/osascript", "-e", script, str(input_path), str(staged_pdf)],
+            ["/usr/bin/osascript", "-e", script, str(staged_input), str(staged_pdf)],
             check=False,
             capture_output=True,
             text=True,
@@ -105,6 +163,8 @@ end run
     except subprocess.TimeoutExpired as exc:
         staged_pdf.unlink(missing_ok=True)
         raise BackendError("PowerPoint export timed out") from exc
+    finally:
+        staged_input.unlink(missing_ok=True)
 
     if (
         result.returncode != 0

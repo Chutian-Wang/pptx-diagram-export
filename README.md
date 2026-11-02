@@ -48,6 +48,10 @@ brew install --cask libreoffice
 The first PowerPoint export may cause macOS to ask whether your terminal or
 Python can automate Microsoft PowerPoint. Allow access for the backend to work.
 
+The PowerPoint backend exports a temporary copy of the saved file, so a deck
+you already have open is left untouched (unsaved edits are not included in the
+export). PowerPoint is quit afterwards only if the export had to launch it.
+
 ### Windows
 
 Install Python 3.10 or newer, making sure the Python launcher (`py`) is

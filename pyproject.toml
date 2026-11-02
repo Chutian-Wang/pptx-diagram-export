@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pptx-diagram-export"
-version = "0.1.1"
+version = "0.1.2"
 description = "Export tightly cropped PowerPoint or PDF diagrams to vector PDF or PNG."
 readme = "README.md"
 requires-python = ">=3.10"
